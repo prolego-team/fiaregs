@@ -50,8 +50,8 @@ def run_demo():
     cross_encoder_name = 'cross-encoder/ms-marco-MiniLM-L-12-v2'
     # cross_encoder_name = None
     # OpenAI
-    # llm_model_name = 'gpt-4-0125-preview'
-    llm_model_name = 'gpt-3.5-turbo-0125'
+    llm_model_name = 'gpt-4-0125-preview'
+    # llm_model_name = 'gpt-3.5-turbo-0125'
     llm_api_key = 'OPENAI_API_KEY'
     # Perplexity
     # llm_model_name = 'mistral-7b-instruct'
@@ -79,7 +79,19 @@ def run_demo():
     # TODO pretty print messages to terminal
 
     # search = drivers.driver_llm_only(llm_model)
-    search = drivers.driver_llm_with_search(
+    # search = drivers.driver_llm_with_search(
+    #     llm_model,
+    #     DATA_DIR,
+    #     DOC_DIR,
+    #     REGS,
+    #     PRE_EXPAND,
+    #     POST_EXPAND,
+    #     model_name,
+    #     cross_encoder_name,
+    #     top_k,
+    #     include_definitions=True
+    # )
+    search = drivers.driver_llm_with_agentic_search(
         llm_model,
         DATA_DIR,
         DOC_DIR,
@@ -89,7 +101,7 @@ def run_demo():
         model_name,
         cross_encoder_name,
         top_k,
-        include_definitions=True
+        include_definitions=use_definitions
     )
 
     while (query := input('Question: ')) != 'quit':
