@@ -8,7 +8,7 @@ from typing import Callable
 
 from sentence_transformers import CrossEncoder
 
-from fiaregs import openaiapi as openai
+from aicore.llm import openaiapi as openai
 import fiaregs.search.embeddings as emb
 
 from fiaregs.search.semantic_search import cosine_search, rerank

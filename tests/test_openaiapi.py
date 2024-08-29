@@ -8,7 +8,7 @@ import pytest
 import openai
 import json
 
-from groundcrew.llm import openaiapi
+from aicore.llm import openaiapi
 
 
 @pytest.fixture

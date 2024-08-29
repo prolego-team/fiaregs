@@ -6,11 +6,15 @@ import sys
 import time
 
 from datasets import Dataset
-import ragas
-from langchain_openai.chat_models import ChatOpenAI
+
+from aicore.llm.client import get_llm_client
+from aicore.llm import openaiapi as openai
+from aicore.llm.tracker import UsageTracker
+from aicore.performance.data import Evaluation, evaluation_to_dict
+from aicore.performance.format import to_excel
 
 from fiaregs import drivers, custom_eval_metrics
-from fiaregs import openaiapi as openai
+
 
 # Suppress a runtime warning re: tokenizer parallelism and multiple threads.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -21,8 +25,8 @@ logging.basicConfig(
     format='%(asctime)s %(message)s',
     datefmt='%m/%d/%Y %H:%M:%S'
 )
-logging.getLogger('search').setLevel(logging.DEBUG)
-log = logging.getLogger('search')
+logging.getLogger(__name__).setLevel(logging.DEBUG)
+log = logging.getLogger(__name__)
 # ===================================================================
 
 DOC_DIR = Path('data/docs')
@@ -44,22 +48,6 @@ REGS = {
 MAX_LLM_CALLS_PER_INTERACTION = 5
 
 DEF_DIVIDER = '\n\n'
-
-
-def evaluate(eval_set: Dataset):
-    gpt4 = ChatOpenAI(model_name="gpt-4")
-    eval = ragas.evaluate(
-        eval_set,
-        metrics = [
-            # ragas.metrics.answer_relevancy,
-            # ragas.metrics.faithfulness,
-            # custom_eval_metrics.answer_correctness,
-            custom_eval_metrics.binary_answer_correctness
-        ],
-        llm=gpt4
-    )
-
-    return eval
 
 
 def generate_responses(eval_set: Dataset, search: Callable) -> Dataset:
@@ -89,24 +77,13 @@ def main():
     # llm_model_name = 'mixtral-8x7b-instruct'
     # llm_api_key = 'PERPLEXITY_API_KEY'
 
-    use_definitions = False
+    use_definitions = True
     top_k = 10
-    n_runs = 3
+    n_runs = 1
 
-    if 'OPENAI' in llm_api_key:
-        api_client = openai.get_openaiai_client(
-            os.environ[llm_api_key],
-        )
-    elif 'PERPLEXITY' in llm_api_key:
-        api_client = openai.get_openaiai_client(
-            os.environ[llm_api_key],
-            base_url='https://api.perplexity.ai'
-        )
-    else:
-        print('Unrecognized API')
-        exit()
-
-    llm_model = openai.start_chat(llm_model_name, api_client)
+    tracker = UsageTracker('llm_tracker')
+    api_client = get_llm_client(llm_api_key)
+    llm_model = openai.start_chat(llm_model_name, api_client, tracker)
 
     # search = drivers.driver_llm_only(llm_model)
     search = drivers.driver_llm_with_search(
@@ -135,25 +112,41 @@ def main():
     # )
 
     eval_set = Dataset.from_json('data/eval_set.json', field='eval_set')
-    # eval_set = Dataset.from_dict(eval_set[:1])
+    eval_set = Dataset.from_dict(eval_set[:1])
+    print('Original eval set')
     print(eval_set)
 
-    evals = []
+    performance_evals = []
     for i in range(n_runs):
         if 'answer' in eval_set.column_names:
             eval_set = eval_set.remove_columns('answer')
         eval_set = generate_responses(eval_set, search)
-        eval = evaluate(eval_set)
-        evals.append(eval)
-        print(eval)
-        eval.to_pandas().to_csv(f'eval_{i+1}.csv')
+        print('New evaluation set')
+        print(eval_set)
 
-    metrics = evals[0].keys()
-    avg_metrics = {k:0 for k in metrics}
-    for eval in evals:
-        for metric in metrics:
-            avg_metrics[metric] += eval[metric]/n_runs
-    print(avg_metrics)
+        for example in eval_set:
+            llm_stats = tracker.pop()
+            llm_usage = {
+                'Input tokens': llm_stats.input_tokens,
+                'Generated tokens': llm_stats.generated_tokens,
+                'Elapsed time': llm_stats.elapsed_time_sec,
+            }
+            perf_eval = Evaluation(
+                task='FIA QA',
+                metadata={
+                    'question': example['question'],
+                    'context': example['contexts'],
+                },
+                llm_usage=llm_usage,
+                expected=example['ground_truth'],
+                actual=example['answer'],
+                confidence='unknown'
+            )
+            print(perf_eval)
+            print(evaluation_to_dict(perf_eval))
+            performance_evals.append(perf_eval)
+
+    to_excel(performance_evals, 'eval_results.xlsx')
 
 
 if __name__=='__main__':

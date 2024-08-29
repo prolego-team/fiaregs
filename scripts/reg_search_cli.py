@@ -3,12 +3,15 @@ FIA Regulation Search for Formula One
 """
 import os
 from pathlib import Path
-
 import logging
 import sys
 
+from aicore.llm.client import get_llm_client
+from aicore.llm import openaiapi as openai
+from aicore.llm.tracker import UsageTracker
+
 from fiaregs import drivers
-from fiaregs import openaiapi as openai
+
 
 # Suppress a runtime warning re: tokenizer parallelism and multiple threads.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -19,8 +22,8 @@ logging.basicConfig(
     format='%(asctime)s %(message)s',
     datefmt='%m/%d/%Y %H:%M:%S'
 )
-logging.getLogger('search').setLevel(logging.DEBUG)
-log = logging.getLogger('search')
+logging.getLogger(__name__).setLevel(logging.DEBUG)
+log = logging.getLogger(__name__)
 # ===================================================================
 
 DOC_DIR = Path('data/docs')
@@ -59,39 +62,14 @@ def run_demo():
 
     use_definitions = True
     top_k = 10
-    n_runs = 3
 
-    if 'OPENAI' in llm_api_key:
-        api_client = openai.get_openaiai_client(
-            os.environ[llm_api_key],
-        )
-    elif 'PERPLEXITY' in llm_api_key:
-        api_client = openai.get_openaiai_client(
-            os.environ[llm_api_key],
-            base_url='https://api.perplexity.ai'
-        )
-    else:
-        print('Unrecognized API')
-        exit()
-
+    api_client = get_llm_client(llm_api_key)
     llm_model = openai.start_chat(llm_model_name, api_client)
 
     # TODO pretty print messages to terminal
 
     # search = drivers.driver_llm_only(llm_model)
-    # search = drivers.driver_llm_with_search(
-    #     llm_model,
-    #     DATA_DIR,
-    #     DOC_DIR,
-    #     REGS,
-    #     PRE_EXPAND,
-    #     POST_EXPAND,
-    #     model_name,
-    #     cross_encoder_name,
-    #     top_k,
-    #     include_definitions=True
-    # )
-    search = drivers.driver_llm_with_agentic_search(
+    search = drivers.driver_llm_with_search(
         llm_model,
         DATA_DIR,
         DOC_DIR,
@@ -101,8 +79,20 @@ def run_demo():
         model_name,
         cross_encoder_name,
         top_k,
-        include_definitions=use_definitions
+        include_definitions=True
     )
+    # search = drivers.driver_llm_with_agentic_search(
+    #     llm_model,
+    #     DATA_DIR,
+    #     DOC_DIR,
+    #     REGS,
+    #     PRE_EXPAND,
+    #     POST_EXPAND,
+    #     model_name,
+    #     cross_encoder_name,
+    #     top_k,
+    #     include_definitions=use_definitions
+    # )
 
     while (query := input('Question: ')) != 'quit':
         print(search(query))

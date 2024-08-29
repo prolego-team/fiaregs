@@ -6,7 +6,7 @@ import logging
 
 from collections.abc import Callable, Generator
 
-from fiaregs import openaiapi as openai
+from aicore.llm import openaiapi as openai
 
 logging.getLogger('react').setLevel(logging.DEBUG)
 log = logging.getLogger('react')
